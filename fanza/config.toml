@@ -10,9 +10,9 @@ path = 'downloads'
 ## 创建子文件夹
 subfolder = true
 ## 下载封面图片（大）
-cover = true
+cover = false
 ## 下载封面图片（小）
-miniature = true
+miniature = false
 
 [behavior]
 ## policy <0-2>; 行为准则
@@ -62,7 +62,7 @@ ffmpeg_log = false
 ## 值太高可能会减慢下载速度
 ## 视频高清（3MB 分片）：16 (~50 MB/s), 32 (~100 MB/s)
 ## -> 默认值：16
-job = 32
+job = 16
 ## buffer <1-..>; 视频码流缓冲区的大小（分片数量）
 ## 高达视频缓冲时，下载器可容纳多少个分片
 ## 这个值是跟同时下载数量 {job} 相关的
