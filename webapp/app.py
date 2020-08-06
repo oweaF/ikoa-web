@@ -1,6 +1,7 @@
 import os
 import subprocess
 import re
+import time
 from threading import Lock
 from collections import deque
 import requests
@@ -28,9 +29,11 @@ APP.config.update(
 REGEXNUMSTRING = r"^[a-zA-Z]{1,10}\-[0-9]{1,10}(?:,[a-zA-Z]{1,10}\-[0-9]{1,10})*$"
 REGEXCIDSTRING = r"^[\w]{3,20}(?:,[\w]{3,20})*$"
 REGEXMGSSTRING = r"^(?:\d{3})?[a-zA-Z]{2,6}-\d{3,5}(?:,(?:\d{3})?[a-zA-Z]{2,6}-\d{3,5})*$"
+REGEXPIDSTRING = r"^[\w]{3,25}(?:,[\w]{3,25})*$"
 REGEXNUM = re.compile(REGEXNUMSTRING)
 REGEXCID = re.compile(REGEXCIDSTRING, flags=re.ASCII)
 REGEXMGS = re.compile(REGEXMGSSTRING)
+REGEXPID = re.compile(REGEXPIDSTRING)
 
 
 LOGIN_MANAGER = LoginManager()
@@ -73,23 +76,30 @@ class LoginForm(FlaskForm):
 
 
 class DownloadForm(FlaskForm):
-    id_type = SelectField('id_type', choices=[('num', 'num'), ('cid', 'cid'), ('mgs', 'mgs')])
+    id_type = SelectField('id_type',
+                          choices=[('cid', 'cid'), ('pid', 'pid'), ('num', 'num'), ('mgs', 'mgs')])
     id_value = StringField('id_value', validators=[DataRequired()])
-    id_tag = StringField('id_tag', validators=[Optional(), Regexp(r"^[\w]{1,10}$", message="Invalid tag!")])
+    id_tag = StringField('id_tag',
+                         validators=[Optional(), Regexp(r"^[\w]{1,15}$", message="Invalid tag!")])
     submit = SubmitField('Submit')
 
     def validate_id_value(self, field):
+        if self.id_type.data == "cid":
+            match_cid = REGEXCID.match(field.data or "")
+            if not match_cid:
+                raise ValidationError('Invalid cid format!')
+            return match_cid
+        if self.id_type.data == "pid":
+            match_pid = REGEXPID.match(field.data or "")
+            if not match_pid:
+                raise ValidationError('Invalid pid format!')
+            return match_pid
         if self.id_type.data == "num":
             match_num = REGEXNUM.match(field.data or "")
             if not match_num:
                 raise ValidationError('Invalid num format!')
             return match_num
-        elif self.id_type.data == "cid":
-            match_cid = REGEXCID.match(field.data or "")
-            if not match_cid:
-                raise ValidationError('Invalid cid format!')
-            return match_cid
-        else:
+        if self.id_type.data == "mgs":
             match_mgs = REGEXMGS.match(field.data or "")
             if not match_mgs:
                 raise ValidationError('Invalid mgs format!')
@@ -168,6 +178,15 @@ def push_log():
     TASK.pushlog_finished = False
     while len(TASK.task_queue) > 0:
         task_id = TASK.task_queue.popleft()
+        job_status = subprocess.check_output("ts -s {}".format(task_id),
+                                             shell=True, universal_newlines=True)
+        if job_status.strip() == 'queued':
+            TASK.task_queue.appendleft(task_id)
+            time.sleep(60)
+            continue
+        if job_status.strip() == 'skipped':
+            continue
+
         with subprocess.Popen(['ts', '-c', str(task_id)], stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, universal_newlines=True) as process:
             for line in process.stdout:
